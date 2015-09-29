@@ -2,9 +2,32 @@
 
 A simple mock-up of the comparative efficiency of database connection pooling techniques in Rails
 
+This came out of an issue my team had where our application (which does significant out-of-database
+processing and barely any in-database processing) started running out of database connections when
+we had a spike in usage. This happened because ActiveRecord will, by default, checkout a connection
+then keep it for each request thread, until that thread dies.
+
 The test consists of two rails apps, one of which (`without-checkouts`) works the default ActiveRecord
 way (one connection will be reserved per thread). The other (`with-checkouts`) manually manages the pool
 itself; it checks out a connection separately for each database action.
+
+## TLDR
+
+If there are more available connections in your pool than simultaneous requests, either way will work fine.
+The 'checkout/checkin' *will* incur *very* slight overhead.
+
+On the other hand, if there are less available connections than simultaneous requests:
+ * If the database is fast and the app is fast, the results will be much the same as above.
+ * If the app is slower than the database, checking out and checking in allows threads to share the database
+ connection, which makes requests significantly faster.
+ * If the database is slow, the two approaches will be basically equivalently slow.
+ * if the overall request time is longer than the pool timeout, the 'peristent-checkout' approach will start dropping
+ requests, where the 'checkout/checkin' approach will only do this when any individual database command takes
+ longer than the pool timeout
+
+This means for a given size of database box (which is generally the hardest thing to scale), and an app which
+does any amount of work outside the database, you can scale out to significantly more web/app boxen since they
+are able to share database connections more effectively.
 
 ## Running
 
